@@ -1,0 +1,181 @@
+
+CREATE TABLE jugadores (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    numero INT CHECK (numero BETWEEN 0 AND 99),
+    posicion VARCHAR(5),
+    altura_cm DECIMAL(5,2),
+    peso_kg DECIMAL(5,2),
+    universidad VARCHAR(100),
+    salario DECIMAL(12,2),
+    estado VARCHAR(20) DEFAULT 'ACTIVO',
+    en_plantilla BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE estadisticas (
+    id SERIAL PRIMARY KEY,
+    id_jugador INT REFERENCES jugadores(id),
+    semana INT,
+    rival VARCHAR(50),
+    yardas_totales INT DEFAULT 0,
+    touchdowns INT DEFAULT 0,
+    tackleos INT DEFAULT 0,
+    capturas DECIMAL(3,1) DEFAULT 0
+);
+
+CREATE TABLE auditoria_salarios (
+    id_log SERIAL PRIMARY KEY,
+    id_jugador INT,
+    salario_anterior DECIMAL(12,2),
+    salario_nuevo DECIMAL(12,2),
+    fecha_cambio TIMESTAMP DEFAULT NOW(),
+    usuario_responsable VARCHAR(50)
+);
+
+CREATE INDEX idx_nombre_upper ON jugadores(UPPER(nombre));
+
+CREATE INDEX idx_reporte_medico ON jugadores(id) WHERE estado = 'LESIONADO';
+
+CREATE INDEX idx_stats_rival ON estadisticas(id_jugador, rival);
+
+
+CREATE OR REPLACE FUNCTION fn_calcular_rendimiento(yds INT, tds INT, sacks DECIMAL)
+RETURNS DECIMAL(10,2) AS $$
+BEGIN
+
+    RETURN (yds / 10.0) + (tds * 6.0) + (sacks * 4.0);
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE OR REPLACE PROCEDURE sp_reportar_lesion(p_id_jugador INT)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_estado_actual VARCHAR;
+BEGIN
+    SELECT estado INTO v_estado_actual FROM jugadores WHERE id = p_id_jugador;
+
+    IF v_estado_actual = 'LESIONADO' THEN
+        RAISE NOTICE 'El jugador ya se encuentra en la lista de lesionados.';
+    ELSE
+        UPDATE jugadores SET estado = 'LESIONADO' WHERE id = p_id_jugador;
+    END IF;
+END;
+$$;
+
+--trigger
+CREATE OR REPLACE FUNCTION fn_auditar_cambio_salario()
+RETURNS TRIGGER AS $$
+BEGIN
+
+    IF OLD.salario <> NEW.salario THEN
+        INSERT INTO auditoria_salarios (id_jugador, salario_anterior, salario_nuevo, usuario_responsable)
+        VALUES (OLD.id, OLD.salario, NEW.salario, CURRENT_USER);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_monitor_salarios
+AFTER UPDATE ON jugadores
+FOR EACH ROW EXECUTE FUNCTION fn_auditar_cambio_salario();
+
+--vistas
+
+CREATE OR REPLACE VIEW v_roster_publico AS
+SELECT
+    j.id, j.nombre, j.numero, j.posicion, j.estado,
+    COALESCE(SUM(e.yardas_totales), 0) as total_yardas,
+    COALESCE(SUM(e.touchdowns), 0) as total_tds,
+
+    fn_calcular_rendimiento(
+        COALESCE(SUM(e.yardas_totales), 0)::INT,
+        COALESCE(SUM(e.touchdowns), 0)::INT,
+        COALESCE(SUM(e.capturas), 0)
+    ) as fantasy_points
+FROM jugadores j
+LEFT JOIN estadisticas e ON j.id = e.id_jugador
+WHERE j.en_plantilla = TRUE
+GROUP BY j.id, j.nombre, j.numero, j.posicion, j.estado;
+
+
+CREATE VIEW v_coach_roster AS
+SELECT id, nombre, numero, posicion, altura_cm, peso_kg, universidad, estado, en_plantilla
+FROM jugadores;
+
+
+CREATE VIEW v_origen_jugadores AS
+SELECT nombre, universidad, posicion FROM jugadores WHERE en_plantilla = TRUE;
+
+
+CREATE VIEW v_datos_vitales AS
+SELECT nombre, numero, altura_cm, peso_kg FROM jugadores WHERE en_plantilla = TRUE;
+
+
+INSERT INTO jugadores (nombre, numero, posicion, altura_cm, peso_kg, universidad, salario, en_plantilla) VALUES
+('Maxx Crosby', 98, 'DE', 196.0, 115.0, 'Eastern Michigan', 23500000.00, TRUE),
+('Davante Adams', 17, 'WR', 185.0, 98.0, 'Fresno State', 28000000.00, TRUE),
+('Gardner Minshew', 15, 'QB', 185.0, 102.0, 'Washington State', 12500000.00, TRUE);
+
+INSERT INTO estadisticas (id_jugador, semana, rival, yardas_totales, touchdowns, capturas)
+VALUES
+((SELECT id FROM jugadores WHERE nombre='Maxx Crosby'), 1, 'Chargers', 0, 0, 1.5),
+((SELECT id FROM jugadores WHERE nombre='Davante Adams'), 1, 'Chargers', 110, 1, 0);
+
+
+-- gerente
+CREATE USER gerente_general WITH PASSWORD '1975';
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO gerente_general;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO gerente_general;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO gerente_general;
+GRANT EXECUTE ON PROCEDURE sp_reportar_lesion TO gerente_general;
+
+--coach
+CREATE USER head_coach WITH PASSWORD 'hola';
+GRANT CONNECT ON DATABASE raiders TO head_coach;
+GRANT USAGE ON SCHEMA public TO head_coach;
+
+-- Vistas
+GRANT SELECT ON v_roster_publico TO head_coach;
+GRANT SELECT ON v_coach_roster TO head_coach;
+GRANT SELECT ON v_origen_jugadores TO head_coach;
+GRANT SELECT ON v_datos_vitales TO head_coach;
+
+GRANT SELECT ON jugadores TO head_coach;
+GRANT UPDATE (altura_cm, peso_kg, estado, posicion) ON jugadores TO head_coach;
+GRANT ALL PRIVILEGES ON estadisticas TO head_coach;
+GRANT USAGE, SELECT ON SEQUENCE estadisticas_id_seq TO head_coach;
+--funciones
+GRANT EXECUTE ON FUNCTION fn_calcular_rendimiento TO head_coach;
+GRANT EXECUTE ON PROCEDURE sp_reportar_lesion TO head_coach;
+
+-- prensa
+CREATE USER prensa_raiders WITH PASSWORD 'profesor';
+GRANT CONNECT ON DATABASE raiders TO prensa_raiders;
+GRANT USAGE ON SCHEMA public TO prensa_raiders;
+
+GRANT SELECT ON v_roster_publico TO prensa_raiders;
+GRANT SELECT ON v_origen_jugadores TO prensa_raiders;
+GRANT SELECT ON v_datos_vitales TO prensa_raiders;
+GRANT EXECUTE ON FUNCTION fn_calcular_rendimiento TO prensa_raiders;
+
+ALTER USER gerente_general WITH PASSWORD '1975';
+ALTER USER head_coach WITH PASSWORD 'hola';
+ALTER USER prensa_raiders WITH PASSWORD 'profesor';
+
+GRANT SELECT ON v_coach_roster TO prensa_raiders;
+GRANT SELECT ON v_origen_jugadores TO prensa_raiders;
+GRANT SELECT ON v_datos_vitales TO prensa_raiders;
+GRANT SELECT ON jugadores TO prensa_raiders;
+GRANT SELECT ON estadisticas TO prensa_raiders;
+
+INSERT INTO estadisticas (id_jugador, semana, rival, yardas_totales, touchdowns, capturas)
+VALUES (
+    (SELECT id FROM jugadores WHERE nombre LIKE '%Gardner Minshew%' LIMIT 1),
+    1,
+    'Chargers',
+    280,
+    2,
+    0
+);

@@ -1,0 +1,322 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<nav class="top-nav">
+    <div class="logo">💀 Raiders Manager</div>
+    <div class="user-menu">
+        Rol: <strong>{{ rol }}</strong> | <a href="/logout" class="btn-logout">Cerrar Sesión</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    {% if rol == 'gerente_general' %}
+    <div class="tabs-container">
+        <a href="{{ url_for('dashboard', modo='coach') }}"
+           class="tab-btn {{ 'active' if modo == 'coach' or not modo else '' }}">
+           💼 Gestión Plantilla
+        </a>
+        <a href="{{ url_for('dashboard', modo='stats') }}"
+           class="tab-btn {{ 'active' if modo == 'stats' else '' }}">
+           📈 Rendimiento
+        </a>
+        <a href="{{ url_for('dashboard', modo='auditoria') }}"
+           class="tab-btn {{ 'active' if modo == 'auditoria' else '' }}">
+           👮 Auditoría Salarial
+        </a>
+    </div>
+    {% endif %}
+
+    {% if rol == 'head_coach' %}
+    <div class="tabs-container">
+        <a href="{{ url_for('dashboard', modo='coach') }}"
+           class="tab-btn {{ 'active' if modo == 'coach' or not modo else '' }}">
+           📋 Plantilla Táctica
+        </a>
+        <a href="{{ url_for('dashboard', modo='stats') }}"
+           class="tab-btn {{ 'active' if modo == 'stats' else '' }}">
+           📈 Estadísticas
+        </a>
+    </div>
+    {% endif %}
+
+    {% if rol == 'prensa_raiders' %}
+    <div class="tabs-container">
+        <a href="{{ url_for('dashboard', modo='coach') }}"
+           class="tab-btn {{ 'active' if modo == 'coach' else '' }}">
+           📋 Plantilla
+        </a>
+        <a href="{{ url_for('dashboard', modo='stats') }}"
+           class="tab-btn {{ 'active' if modo == 'stats' else '' }}">
+           📈 Estadísticas
+        </a>
+        <a href="{{ url_for('dashboard', modo='vistas') }}"
+           class="tab-btn {{ 'active' if modo == 'vistas' else '' }}">
+           📊 Reportes Especiales
+        </a>
+    </div>
+    {% endif %}
+
+
+    {% if rol == 'gerente_general' and modo != 'stats' and modo != 'auditoria' %}
+    <div class="card admin-panel">
+        <h3>✍️ Contratar Nuevo Jugador</h3>
+        <form action="/agregar" method="post" class="grid-form">
+
+            <div class="form-group">
+                <label>Nombre Completo:</label>
+                <input type="text" name="nombre" placeholder="Ej. Derek Carr" required>
+            </div>
+
+            <div class="form-group">
+                <label>Dorsal #:</label>
+                <input type="number" name="numero" placeholder="0-99" min="0" max="99" required style="font-weight: bold;">
+            </div>
+
+            <div class="form-group">
+                <label>Posición:</label>
+                <select name="posicion">
+                    <option value="QB">QB - Quarterback</option>
+                    <option value="WR">WR - Receptor</option>
+                    <option value="RB">RB - Corredor</option>
+                    <option value="DE">DE - Defensivo</option>
+                    <option value="LB">LB - Linebacker</option>
+                    <option value="CB">CB - Esquinero</option>
+                    <option value="OT">OT - Línea Of.</option>
+                    <option value="DT">DT - Tackle Def.</option>
+                    <option value="TE">TE - Ala Cerrada</option>
+                    <option value="K">K - Pateador</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Altura (cm):</label>
+                <input type="number" step="0.01" name="altura" min="0" placeholder="180.5">
+            </div>
+
+            <div class="form-group">
+                <label>Peso (kg):</label>
+                <input type="number" step="0.01" name="peso" min="0" placeholder="95.0">
+            </div>
+
+            <div class="form-group">
+                <label>Universidad:</label>
+                <input type="text" name="universidad" placeholder="Ej. Alabama">
+            </div>
+
+            <div class="form-group">
+                <label>Salario Anual ($):</label>
+                <input type="number" step="0.01" name="salario" placeholder="$$$" min="0" required>
+            </div>
+
+            <div class="form-group" style="align-self: end;">
+                <button type="submit" class="btn-add">Firmar Contrato</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+
+    {% if modo != 'stats' and modo != 'vistas' and modo != 'auditoria' %}
+    <div class="card">
+        <h3>📋 Plantilla Oficial</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Nombre</th>
+                    <th>Pos</th>
+                    <th>Físico</th>
+                    <th>Estado</th>
+                    {% if rol == 'gerente_general' %}<th>Salario</th>{% endif %}
+
+                    {% if rol != 'prensa_raiders' %}
+                    <th>Acciones</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for j in datos['roster'] %}
+                <tr>
+                    <td style="font-size: 1.2em; font-weight: bold;">{{ j['numero'] }}</td>
+                    <td>
+                        {{ j['nombre'] }}
+                        <div style="font-size: 0.8em; color: #666;">{{ j['universidad'] }}</div>
+                    </td>
+                    <td><span class="badge gray">{{ j['posicion'] }}</span></td>
+                    <td>{{ j['altura_cm'] }}cm / {{ j['peso_kg'] }}kg</td>
+
+                    <td>
+                        <span class="badge {{ 'green' if j['estado'] == 'ACTIVO' else 'black' if j['estado'] == 'CORTADO' else 'red' }}">
+                            {{ j['estado'] }}
+                        </span>
+                    </td>
+
+                    {% if rol == 'gerente_general' %}
+                        <td class="money">${{ "{:,.2f}".format(j['salario']) }}</td>
+                    {% endif %}
+
+                    {% if rol != 'prensa_raiders' %}
+                    <td style="display: flex; gap: 8px; align-items: center;">
+
+                        <form action="/actualizar" method="post" class="flex-form">
+                            <input type="hidden" name="id" value="{{ j['id'] }}">
+
+                            <div class="input-wrapper" title="Actualizar Peso">
+                                <span class="input-label">Kg:</span>
+                                <input type="number" name="peso" value="{{ j['peso_kg'] }}" min="0" step="0.1" style="width:55px">
+                            </div>
+
+                            {% if rol == 'gerente_general' %}
+                            <div class="input-wrapper" title="Actualizar Salario">
+                                <span class="input-label">$</span>
+                                <input type="number" name="salario" value="{{ j['salario'] }}" min="0" step="0.01" style="width:80px">
+                            </div>
+                            {% endif %}
+
+                            <select name="estado" style="width: 100px;">
+                                <option value="ACTIVO" {% if j['estado']=='ACTIVO' %}selected{% endif %}>🟢 Activo</option>
+                                <option value="LESIONADO" {% if j['estado']=='LESIONADO' %}selected{% endif %}>🏥 Lesión</option>
+                            </select>
+
+                            <button type="submit" class="btn-small" title="Guardar Cambios">💾</button>
+                        </form>
+
+                        {% if rol == 'gerente_general' %}
+                        <form action="/cortar" method="post" onsubmit="return confirm('¿Estás seguro de CORTAR a {{ j['nombre'] }}?');">
+                            <input type="hidden" name="id" value="{{ j['id'] }}">
+                            <button type="submit" class="btn-small btn-danger" title="Cortar Jugador">✂️</button>
+                        </form>
+                        {% endif %}
+
+                    </td>
+                    {% endif %} </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+
+    {% if modo == 'stats' %}
+    <div class="card">
+        <h3>📈 Estadísticas y Rendimiento</h3>
+
+        {% if datos.get('stats') %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Posición</th>
+                    <th style="text-align: center;">Touchdowns</th>
+                    <th style="text-align: center;">Yardas</th>
+                    <th style="text-align: center;">Tackles</th>
+                    <th style="text-align: center;">Sacks</th>
+                    <th style="text-align: center; background: #f1c40f; color: black;">Rendimiento</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in datos['stats'] %}
+                <tr>
+                    <td>{{ s['nombre'] }}</td>
+                    <td><span class="badge gray">{{ s['posicion'] }}</span></td>
+                    <td style="text-align: center; font-weight: bold; color: #27ae60;">{{ s['touchdowns'] }}</td>
+                    <td style="text-align: center;">{{ s['yardas'] }}</td>
+                    <td style="text-align: center;">{{ s['tackles'] }}</td>
+                    <td style="text-align: center;">{{ s['sacks'] }}</td>
+
+                    <td style="text-align: center; font-weight: bold; font-size: 1.1em;">
+                        {{ "{:.1f}".format(s['rendimiento']) }} pts
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding: 20px; text-align: center; color: #666; background: #f9f9f9; border-radius: 4px;">
+            <p>⚠️ <strong>No hay datos disponibles.</strong></p>
+            <p>Verifica que tengas registros en la tabla <code>estadisticas</code> y permisos asignados.</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+
+    {% if rol == 'gerente_general' and modo == 'auditoria' %}
+    <div class="card">
+        <h3>👮 Historial de Cambios de Salario</h3>
+        {% if datos.get('auditoria') %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Jugador</th>
+                    <th>Salario Anterior</th>
+                    <th>Salario Nuevo</th>
+                    <th>Diferencia</th>
+                    <th>Responsable</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in datos['auditoria'] %}
+                <tr>
+                    <td>{{ log['fecha_cambio'].strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td><b>{{ log['nombre'] }}</b></td>
+                    <td class="money" style="color: #c0392b;">${{ "{:,.2f}".format(log['salario_anterior']) }}</td>
+                    <td class="money" style="color: #27ae60;">${{ "{:,.2f}".format(log['salario_nuevo']) }}</td>
+
+                    <td style="font-weight: bold; color: {{ 'green' if log['diferencia'] > 0 else 'red' }};">
+                        {{ "+" if log['diferencia'] > 0 else "" }}{{ "{:,.2f}".format(log['diferencia']) }}
+                    </td>
+
+                    <td><span class="badge gray">{{ log['usuario_responsable'] }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="text-align: center; padding: 20px;">No hay registros de cambios de salario aún.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+
+    {% if rol == 'prensa_raiders' and modo == 'vistas' %}
+    <div class="split-layout">
+        <div class="card">
+            <h3>🎓 Reporte de Origen</h3>
+            <table>
+                <thead><tr><th>Nombre</th><th>Pos</th><th>Universidad</th></tr></thead>
+                <tbody>
+                {% for j in datos['origen'] %}
+                <tr>
+                    <td>{{ j['nombre'] }}</td>
+                    <td><span class="badge gray">{{ j['posicion'] }}</span></td>
+                    <td>{{ j['universidad'] }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>💪 Datos Vitales</h3>
+            <table>
+                <thead><tr><th>#</th><th>Nombre</th><th>Altura</th><th>Peso</th></tr></thead>
+                <tbody>
+                {% for j in datos['vitales'] %}
+                <tr>
+                    <td><b>{{ j['numero'] }}</b></td>
+                    <td>{{ j['nombre'] }}</td>
+                    <td>{{ j['altura_cm'] }} cm</td>
+                    <td>{{ j['peso_kg'] }} kg</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
